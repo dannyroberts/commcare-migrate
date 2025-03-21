@@ -1,4 +1,5 @@
 import os
+import sys
 from itertools import islice
 
 import requests
@@ -16,11 +17,43 @@ def call_commcare_export(det_username, det_password):
         "--auth-mode", "apikey",
         "--username", det_username,
         "--password", det_password,
-        "--query", "/Users/danielroberts/Downloads/WebApp - Case List - Registration Form (created 2021-04-08)-DET.xlsx",
+        "--query", "./commcare-migrate-source.xlsx",
         "--output-format", "sql",
         "--output", DB,
         "--project", "droberts"
     ])
+
+
+def push_from_db_to_target(det_username, det_password, target_username, target_password, target_project_url):
+    with get_db_context(DB) as sql_db:
+        table = sql_db.get_table('Forms')
+        result = sql_db.Session().execute(
+            select(table).order_by(table.c.received_on)
+        )
+        for row in result:
+            form_link = row['form_link']
+            form_id = row['formid']
+            form_received_on = row['received_on']
+            if form_link is None:
+                print(f"There is no form link for {form_id}")
+                continue
+            print(form_link)
+            xform_response = requests.get(form_link,
+                                          headers={'Authorization': f'ApiKey {det_username}:{det_password}'})
+            if xform_response.status_code != 200:
+                print(f"There was an error fetching the form {form_id} from {form_link}")
+                continue
+            xform = xform_response.text
+
+            response = post_form(xform, target_project_url, target_username, target_password,
+                                 spoofed_submit_time=form_received_on)
+            if response.status_code == 500:
+                print(f"There was an error on the target server processing form {form_id}")
+                continue
+            else:
+                print(response.status_code)
+                print(response.text)
+
 
 def get_db_context(db_string):
     # This is kind of silly but I just want to be able to call .get_table and .Session
@@ -45,30 +78,7 @@ if __name__ == "__main__":
     TARGET_PROJECT_URL = os.getenv("TARGET_PROJECT_URL")
     TARGET_USERNAME = os.getenv("TARGET_USERNAME")
     TARGET_PASSWORD = os.getenv("TARGET_PASSWORD")
-    # call_commcare_export(os.getenv("DET_USERNAME"), os.getenv("DET_PASSWORD"))
-    with get_db_context(DB) as sql_db:
-        table = sql_db.get_table('Forms')
-        result = sql_db.Session().execute(
-            select(table).order_by(table.c.received_on)
-        )
-        for row in result:
-            form_link = row['form_link']
-            form_id = row['formid']
-            form_received_on = row['received_on']
-            if form_link is None:
-                print(f"There is no form link for {form_id}")
-                continue
-            print(form_link)
-            xform_response = requests.get(form_link, headers={'Authorization': f'ApiKey {DET_USERNAME}:{DET_PASSWORD}'})
-            if xform_response.status_code != 200:
-                print(f"There was an error fetching the form {form_id} from {form_link}")
-                continue
-            xform = xform_response.text
-
-            response = post_form(xform, TARGET_PROJECT_URL, TARGET_USERNAME, TARGET_PASSWORD, spoofed_submit_time=form_received_on)
-            if response.status_code == 500:
-                print(f"There was an error on the target server processing form {form_id}")
-                continue
-            else:
-                print(response.status_code)
-                print(response.text)
+    if sys.argv[1] == 'fetch':
+        call_commcare_export(os.getenv("DET_USERNAME"), os.getenv("DET_PASSWORD"))
+    elif sys.argv[1] == 'push':
+        push_from_db_to_target(DET_USERNAME, DET_PASSWORD, TARGET_USERNAME, TARGET_PASSWORD, TARGET_PROJECT_URL)
