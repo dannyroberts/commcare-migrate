@@ -1,0 +1,10 @@
+[project]
+name = "commcare-migrate"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10.0"
+dependencies = [
+    "commcare-export>=1.10.0",
+    "psycopg2>=2.9.10",
+]
