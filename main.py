@@ -11,13 +11,13 @@ from sqlalchemy import select
 DB = "postgresql://localhost:5432/det"
 
 
-def call_commcare_export(det_username, det_password):
+def call_commcare_export(det_username, det_password, query):
 
     commcare_export([
         "--auth-mode", "apikey",
         "--username", det_username,
         "--password", det_password,
-        "--query", "./commcare-migrate-source.xlsx",
+        "--query", query,
         "--output-format", "sql",
         "--output", DB,
         "--project", "droberts"
@@ -79,6 +79,7 @@ if __name__ == "__main__":
     TARGET_USERNAME = os.getenv("TARGET_USERNAME")
     TARGET_PASSWORD = os.getenv("TARGET_PASSWORD")
     if sys.argv[1] == 'fetch':
-        call_commcare_export(os.getenv("DET_USERNAME"), os.getenv("DET_PASSWORD"))
+        call_commcare_export(os.getenv("DET_USERNAME"), os.getenv("DET_PASSWORD"),
+                             './commcare-migrate-source.xlsx')
     elif sys.argv[1] == 'push':
         push_from_db_to_target(DET_USERNAME, DET_PASSWORD, TARGET_USERNAME, TARGET_PASSWORD, TARGET_PROJECT_URL)
